@@ -61,6 +61,8 @@ static int __attribute__((section(".ccmram"))) cnt;
 /* Wait for interrupt */
 #define WFI()	asm volatile ("wfi");
 /* NVIC Enable/Disable */
+#define USR_LED_PORT	GPIOE_BASE
+#define USR_LED_PIN	7
 static inline void nvic_irq_enable(uint8_t n)
 {
 	uint8_t i = n/32;
@@ -182,15 +184,26 @@ void usr_led_config(void)
 	/* Enable GPIOE Clock on AHB1 */ 
 	RCC_AHB1ENR |= (1 << 4);
 	/* Set GPIOE.7 as output */
-	GPIOE_MODER |= (1 << 14);
+	GPIOE_MODER &= ~(0x03 << USR_LED_PIN*2);
+	GPIOE_MODER |= (1 << USR_LED_PIN*2);
 	/* Set mode to Push-Pull */
 	GPIOE_OTYPER |= (0 << 4);
 	/* Low speed IO */
-	GPIOE_OSPEEDR |= (0 << 6) | (0 << 7);
+	GPIOE_OSPEEDR &= (0x03 << USR_LED_PIN*2);
+	/* GPIOE_OSPEEDR |= (0 << 6) | (0 << 7);*/
 	/* Pulldown config */
-	GPIOE_PUPDR |= (0 << 0) | (1 << 7);
+	GPIOE_PUPDR &= ~(0x03 << USR_LED_PIN*2);
+	GPIOE_PUPDR |= (0x04 << USR_LED_PIN*2);//(1 << 15) | (0 << 14);
 	/* Turn it on/off with atomic bit more BSRR register */
+	//GPIOE_BSRR = (1 << 7);
+}
+static inline __attribute__((always_inline)) void usr_led_on(void)
+{
 	GPIOE_BSRR = (1 << 7);
+}
+static inline __attribute__((always_inline)) void usr_led_off(void)
+{
+	GPIOE_BSRR = ( 1 << (23));
 }
 int main(void)
 {
@@ -198,6 +211,7 @@ int main(void)
 	rcc_config();
 	systick_enable();
 	usr_led_config();
+	usr_led_on();
 	while(1)
 	{
 	//	cnt++;
