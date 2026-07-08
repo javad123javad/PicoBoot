@@ -15,6 +15,7 @@ static int __attribute__((section(".ccmram"))) cnt;
 /* Peripherals registers */
 #define RCC_APB1ENR	(*(volatile uint32_t *)(0x40023840))
 #define RCC_APB2ENR	(*(volatile uint32_t *)(0x40023844))
+#define RCC_AHB1ENR	(*(volatile uint32_t *)(RCC_BASE + 0x30))
 /* SysTick register */
 #define STK_BASE	(0xE000E010)
 #define STK_CSR		(*(volatile uint32_t *)(STK_BASE))
@@ -44,6 +45,17 @@ static int __attribute__((section(".ccmram"))) cnt;
 #define PLLP 2
 #define PLLQ 7
 #define PLLR 0
+
+/* GPIO Registers */
+#define GPIOE_BASE	(0x40021000)
+#define GPIOE_MODER	(*(volatile uint32_t *)(GPIOE_BASE + 0x00))
+#define GPIOE_OTYPER	(*(volatile uint32_t *)(GPIOE_BASE + 0x04))
+#define GPIOE_OSPEEDR	(*(volatile uint32_t *)(GPIOE_BASE + 0x08))
+#define GPIOE_PUPDR	(*(volatile uint32_t *)(GPIOE_BASE + 0x0C))
+#define GPIOE_ODR	(*(volatile uint32_t *)(GPIOE_BASE + 0x14))
+#define GPIOE_BSRR	(*(volatile uint32_t *)(GPIOE_BASE + 0x18))
+
+/* MACRO's */
 /* Memory barrier, flush */
 #define DMB() asm volatile ("dmb");
 /* Wait for interrupt */
@@ -163,11 +175,29 @@ void isr_systick(void)
 {
 	++jiffies;
 }
+
+void usr_led_config(void)
+{
+	/* USER LED is connected to GPIOE.7 */
+	/* Enable GPIOE Clock on AHB1 */ 
+	RCC_AHB1ENR |= (1 << 4);
+	/* Set GPIOE.7 as output */
+	GPIOE_MODER |= (1 << 14);
+	/* Set mode to Push-Pull */
+	GPIOE_OTYPER |= (0 << 4);
+	/* Low speed IO */
+	GPIOE_OSPEEDR |= (0 << 6) | (0 << 7);
+	/* Pulldown config */
+	GPIOE_PUPDR |= (0 << 0) | (1 << 7);
+	/* Turn it on/off with atomic bit more BSRR register */
+	GPIOE_BSRR = (1 << 7);
+}
 int main(void)
 {
 	flash_set_waitstates(5);
 	rcc_config();
 	systick_enable();
+	usr_led_config();
 	while(1)
 	{
 	//	cnt++;
