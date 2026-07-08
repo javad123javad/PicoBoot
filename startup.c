@@ -36,7 +36,7 @@ void isr_reset(void)
 		src++;
 	}
 
-	src = (unsigned int*) &_start_bss;
+	dst = (unsigned int*) &_start_bss;
 	while(dst < (unsigned int *) &_end_bss)
 	{
 		*dst = 0U;
