@@ -33,3 +33,4 @@ clean:
 	rm -rf $(BOOTLOADER_NAME).bin $(BOOTLOADER_NAME).elf *.o $(BOOTLOADER_NAME).map
 	rm -rf $(APP).bin $(APP).elf $(APP).map 
 	rm -rf image.bin
+	rm -rf *.map
