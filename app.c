@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-static int __attribute__((section(".ccmram"))) cnt;
+//static int __attribute__((section(".ccmram"))) cnt;
 #define NVIC_ISER_BASE	(0XE000E100)
 #define NVIC_ICER_BASE	(0XE000E180)
 #define NVIC_IPRX_BASE	(0xE000E400)
@@ -22,8 +22,25 @@ static int __attribute__((section(".ccmram"))) cnt;
 #define STK_LOAD	(*(volatile uint32_t *)(STK_BASE + 0x04))
 #define STK_VAL		(*(volatile uint32_t *)(STK_BASE + 0x08))
 #define STK_CALIB	(*(volatile uint32_t *)(STK_BASE + 0x0C))
+/* TIME1 Registers */
+#define TIM1_BASE	(0x40010000)
+#define TIM1_CR1	(*(volatile uint32_t *)(TIM1_BASE + 0x00))
+#define TIM1_CR2	(*(volatile uint32_t *)(TIM1_BASE + 0x04))
+#define TIM1_SR		(*(volatile uint32_t *)(TIM1_BASE + 0x10))
+#define TIM1_EGR	(*(volatile uint32_t *)(TIM1_BASE + 0x14))
+#define TIM1_CCMR1	(*(volatile uint32_t *)(TIM1_BASE + 0x18))
+#define TIM1_CCMR2	(*(volatile uint32_t *)(TIM1_BASE + 0x1C))
+#define TIM1_CCER	(*(volatile uint32_t *)(TIM1_BASE + 0x20))
+#define TIM1_CNT	(*(volatile uint32_t *)(TIM1_BASE + 0x24))
+#define TIM1_PSC	(*(volatile uint32_t *)(TIM1_BASE + 0x28))
+#define TIM1_ARR	(*(volatile uint32_t *)(TIM1_BASE + 0x2C))
+#define TIM1_RCR	(*(volatile uint32_t *)(TIM1_BASE + 0x30))
+#define TIM1_CCR3	(*(volatile uint32_t *)(TIM1_BASE + 0x3C))
+#define TIM1_BDTR	(*(volatile uint32_t *)(TIM1_BASE + 0x44))
+
 
 /* RCC bit definition */
+#define RCC_TIM1_EN	(1 << 0)
 #define RCC_CR_PLLRDY 	(1 << 25)
 #define RCC_CR_PLLON 	(1 << 24)
 #define RCC_CR_HSERDY 	(1 << 17)
@@ -54,7 +71,8 @@ static int __attribute__((section(".ccmram"))) cnt;
 #define GPIOE_PUPDR	(*(volatile uint32_t *)(GPIOE_BASE + 0x0C))
 #define GPIOE_ODR	(*(volatile uint32_t *)(GPIOE_BASE + 0x14))
 #define GPIOE_BSRR	(*(volatile uint32_t *)(GPIOE_BASE + 0x18))
-
+#define GPIOE_AFRL	(*(volatile uint32_t *)(GPIOE_BASE + 0x20))
+#define GPIOE_AFRH	(*(volatile uint32_t *)(GPIOE_BASE + 0x24))
 /* MACRO's */
 /* Memory barrier, flush */
 #define DMB() asm volatile ("dmb");
@@ -153,9 +171,9 @@ static void rcc_config(void)
 
 	/* Activate clock for USART1 */
 	/*reg32 = *(volatile uint32_t *)RCC_APB2ENR;
-	reg32 |= (1<< 4);
-	RCC_APB2ENR = reg32;
-	*/
+	  reg32 |= (1<< 4);
+	  RCC_APB2ENR = reg32;
+	 */
 }
 
 static void systick_enable(void)
@@ -205,6 +223,56 @@ static inline __attribute__((always_inline)) void usr_led_off(void)
 {
 	GPIOE_BSRR = ( 1 << (23));
 }
+
+/* Configuring GPIOE.13 as PWM signal generator */
+#define USR_PWM_PIN	13
+void usr_pwm_gpio_config(void)
+{
+	/* Set mode for the pin 13 as AF */
+	GPIOE_MODER &= ~(0x03 << USR_PWM_PIN*2);
+	GPIOE_MODER |= (0x02 << USR_PWM_PIN * 2);
+	/* Push pull */
+	GPIOE_OTYPER &= ~(1 << USR_PWM_PIN);
+	/* High Speed */
+	GPIOE_OSPEEDR &= ~(0x03 << USR_PWM_PIN * 2);
+	GPIOE_OSPEEDR |= (0x02 << USR_PWM_PIN * 2);
+	/* Pull Down */
+	GPIOE_PUPDR &= ~(0x03 << USR_PWM_PIN *2);
+	GPIOE_PUPDR |= (0x02 << USR_PWM_PIN *2);
+	/* AF1 : TIM1 for PWM */
+	GPIOE_AFRH &= ~(0xF << ((USR_PWM_PIN - 8)*4));
+	GPIOE_AFRH |= (0x1 << ((USR_PWM_PIN - 8)*4));
+}
+void usr_pwm_timer_config(uint32_t clk, uint32_t freq, uint32_t dutycycle)
+{
+	/* Disable clock for TIM1 in APB2 to set init values */
+	RCC_APB2ENR |= RCC_TIM1_EN;
+	TIM1_CCER &= ~(1<< 8);
+	TIM1_CR1 = 0;
+	TIM1_PSC = 0;
+	/* Calc ARR value */
+	uint32_t psc_val = (clk / 1000000) - 1;  // scale to 1MHz
+	uint32_t arr_val = 100000/freq;
+	uint32_t crr_val = (arr_val * dutycycle)/100;
+
+	TIM1_PSC = psc_val;
+	TIM1_ARR = arr_val - 1;
+	TIM1_CCR3= crr_val; 
+	/* Clear CCMR1&2 */
+	TIM1_CCMR2 &= ~(0x03 << 0);
+	TIM1_CCMR2 &= ~(0x07 << 4);
+	/* Set it as PWM Mode 1 */
+	TIM1_CCMR2 |= (0x06 << 4);
+	/* Enable CC3ER */
+	TIM1_CCER |= (1 << 8);
+
+	/* Enable Counter Mode (upcoming) */
+	TIM1_CR1 |= (1 << 7) | (1 << 0);
+
+	/* Enable master clock */
+	TIM1_BDTR |= (1 << 15);
+	RCC_APB2ENR |= RCC_TIM1_EN;
+}
 int main(void)
 {
 	flash_set_waitstates(5);
@@ -212,10 +280,12 @@ int main(void)
 	systick_enable();
 	usr_led_config();
 	usr_led_on();
+	usr_pwm_gpio_config();
+	usr_pwm_timer_config(CPU_FREQ, 100, 50);
 	while(1)
 	{
-	//	cnt++;
-	WFI();
+		//	cnt++;
+		WFI();
 	}
 	return 0;
 }

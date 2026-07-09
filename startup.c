@@ -62,29 +62,16 @@ void __attribute__((weak)) isr_empty()
 
 void __attribute__((weak)) isr_systick()
 {
+	while(1){}
 }
-/*
-void main(void)
+void __attribute__((weak)) isr_tim1A()
 {
-	// Find app end stack
-	uint32_t app_end_stack = *((uint32_t *)(APPOFFSET));
-	// Find the APP entry
-	void (*app_entry)(void);
-	app_entry = (void*)(*((uint32_t *)(APPOFFSET + 4)));
-
-	// Disable all interrupts
-	asm volatile ("cpsid i");
-
-	// Reset MSP to the end of the stack for the main app
-	asm volatile ("msr msp, %0" :: "r"(app_end_stack));
-	// Load the VTOR register with the new addres of the ISR
-	uint32_t* VTOR = (uint32_t *)(0xE000ED08);
-	(*VTOR) = (uint32_t )(APPOFFSET);
-	asm volatile ("cpsie i");
-	asm volatile ("mov pc, %0" :: "r"(app_entry));
-	// Enable all interrupts
+	while(1){}
 }
-*/
+void __attribute__((weak)) isr_tim1B()
+{
+}
+
 /////////////////
 __attribute__ ((section(".isr_vector")))
 void (* const IV[])(void) = 
@@ -124,8 +111,8 @@ void (* const IV[])(void) =
 	isr_empty,                     // Watchdog timer
 	isr_empty,                     // Timer 0 subtimer A
 	isr_empty,                     // Timer 0 subtimer B
-	isr_empty,                     // Timer 1 subtimer A
-	isr_empty,                     // Timer 1 subtimer B
+	isr_tim1A,                     // Timer 1 subtimer A
+	isr_tim1B,                     // Timer 1 subtimer B
 	isr_empty,                     // Timer 2 subtimer A
 	isr_empty,                     // Timer 3 subtimer B
 	isr_empty,                     // Analog Comparator 0
